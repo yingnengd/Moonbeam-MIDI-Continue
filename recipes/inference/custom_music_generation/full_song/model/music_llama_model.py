@@ -1,5 +1,5 @@
-from model.music_llama import MusicLLaMA
-from model.base_model import BaseMusicModel
+from custom_music_generation.full_song.model.music_llama import MusicLLaMA
+from custom_music_generation.full_song.model.base_model import BaseMusicModel
 
 class MusicLlamaModel(BaseMusicModel):
     def __init__(self, ckpt_path, device="mps"):
