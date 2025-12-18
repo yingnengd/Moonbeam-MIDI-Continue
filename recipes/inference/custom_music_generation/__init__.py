@@ -2,5 +2,7 @@
 # This software may be used and distributed in accordance with the terms of the Llama 3 Community License Agreement.
 
 # from .generation import Llama
+# 必须这样写，或者干脆留空
+from .generation import MusicLlama
 # from .model import ModelArgs, Transformer
 # from .tokenizer import Dialog, Tokenizer
