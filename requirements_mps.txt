@@ -1,0 +1,23 @@
+# =========================
+# Core (Apple Silicon MPS)
+# =========================
+torch==2.2.2
+accelerate
+
+# =========================
+# Transformers / Moonbeam
+# =========================
+transformers>=4.38.0
+tokenizers==0.19.1
+sentencepiece
+regex!=2019.12.17
+typing-extensions==4.8.0
+appdirs
+chardet
+
+# =========================
+# Music / MIDI
+# =========================
+music21
+mido
+scipy
