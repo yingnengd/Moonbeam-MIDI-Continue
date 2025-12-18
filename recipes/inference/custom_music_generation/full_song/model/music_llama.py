@@ -4,7 +4,7 @@ import sys
 #from custom_music_generation.generation import Llama
 
 from custom_music_generation.generation import MusicLlama
-from model.base_model import BaseMusicModel
+from custom_music_generation.full_song.model.base_model import BaseMusicModel
 
 class MusicLlamaModel(BaseMusicModel):
     def __init__(self, ckpt):
