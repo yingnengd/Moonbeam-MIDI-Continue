@@ -6,7 +6,13 @@ import os
 import torch
 import random
 from pathlib import Path
-from generation import MusicLlama
+from generation import MusicLlama# ============================================================
+# MusicLlama Local .pt | Full Song Continuation (NO CONFIG)
+# ============================================================
+
+import torch
+import random
+from pathlib import Path
 
 # ============================================================
 # TORCH / DEVICE
@@ -46,8 +52,8 @@ ENERGY_CONFIG = {
     "high": dict(temperature=1.15, top_p=0.95),
 }
 
-BARS_TO_TOKENS = 96  # 每小节对应 token 数
-MAX_TOKENS = 1024    # 安全上限
+BARS_TO_TOKENS = 96
+MAX_TOKENS = 1024
 
 # ============================================================
 # JAY CHOU STYLE RULES
@@ -84,109 +90,154 @@ def jay_next_degree(prev):
     choices, weights = zip(*MELODY_TRANSITION.get(prev, [(prev, 1.0)]))
     return random.choices(choices, weights)[0]
 
-def apply_jay_rules(midi_data, section, energy):
-    """
-    midi_data: MusicLlama decode 后的 midi 对象
-    """
-    if not midi_data.notes:
-        return midi_data
+def apply_jay_rules(midi, section, energy):
+    if not hasattr(midi, "notes"):
+        return midi
 
     prev_degree = 1
     low, high = SECTION_PITCH_RANGE[energy]
 
-    for note in midi_data.notes:
+    for n in midi.notes:
         degree = jay_next_degree(prev_degree)
-        pitch = TONIC + PENTATONIC[(degree - 1) % len(PENTATONIC)]
+        pitch = TONIC + PENTATONIC[(degree - 1) % 5]
 
         while pitch < low:
             pitch += 12
         while pitch > high:
             pitch -= 12
 
-        note.pitch = pitch
+        n.pitch = pitch
 
         if energy == "high":
-            note.velocity = min(127, int(note.velocity * 1.2))
+            n.velocity = min(127, int(n.velocity * 1.2))
         elif energy == "low":
-            note.velocity = int(note.velocity * 0.85)
+            n.velocity = int(n.velocity * 0.85)
 
         prev_degree = degree
 
-    end_degree = SECTION_END_DEGREE.get(section, 1)
-    midi_data.notes[-1].pitch = TONIC + PENTATONIC[(end_degree - 1) % len(PENTATONIC)]
+    end_deg = SECTION_END_DEGREE.get(section, 1)
+    midi.notes[-1].pitch = TONIC + PENTATONIC[(end_deg - 1) % 5]
+    return midi
 
-    return midi_data
-
-# ============================================================
-# LOAD LOCAL .PT MODEL (MusicLlama)
-# ============================================================
-
-MODEL_PT_PATH = Path("model_local.pt")  # <-- 改成你的权重路径
-CONFIG_PATH   = Path("config.yaml")     # <-- 配置路径
-TOKENIZER_PATH= Path("tokenizer.json")  # <-- tokenizer 路径
-
-assert MODEL_PT_PATH.exists(), f"❌ Model not found: {MODEL_PT_PATH}"
-
-generator = MusicLlama.build(
-    ckpt_dir=str(MODEL_PT_PATH),
-    model_config_path=str(CONFIG_PATH),
-    tokenizer_path=str(TOKENIZER_PATH),
-    max_seq_len=MAX_TOKENS,
-    max_batch_size=1,
-    finetuned_PEFT_weight_path=None,
-).model.to(device)
-
-generator.eval()
-print("✅ MusicLlama local .pt loaded")
 
 # ============================================================
-# OUTPUT DIR
+# CONCAT ALL SECTIONS INTO FULL SONG
 # ============================================================
 
-output_dir = Path("outputs")
-output_dir.mkdir(exist_ok=True)
+def concat_midis(midi_paths, out_path):
+    full = pretty_midi.PrettyMIDI()
+    instrument_map = {}
+    current_time = 0.0
 
-previous_tokens = None
+    for p in midi_paths:
+        m = pretty_midi.PrettyMIDI(str(p))
+
+        for inst in m.instruments:
+            if inst.program not in instrument_map:
+                new_inst = pretty_midi.Instrument(program=inst.program)
+                full.instruments.append(new_inst)
+                instrument_map[inst.program] = new_inst
+
+            target_inst = instrument_map[inst.program]
+
+            for note in inst.notes:
+                target_inst.notes.append(
+                    pretty_midi.Note(
+                        velocity=note.velocity,
+                        pitch=note.pitch,
+                        start=note.start + current_time,
+                        end=note.end + current_time
+                    )
+                )
+
+        # 推进时间轴
+        current_time += m.get_end_time()
+
+    full.write(str(out_path))
+    
+
+# ============================================================
+# LOAD LOCAL PT MODEL (NO CONFIG)
+# ============================================================
+
+MODEL_PT_PATH = Path("model_local.pt")  # ← 改成你的 pt 路径
+assert MODEL_PT_PATH.exists(), "❌ model pt not found"
+
+print("📦 Loading model...")
+bundle = torch.load(MODEL_PT_PATH, map_location=device)
+
+# 兼容不同保存方式
+model = bundle.get("model", bundle)
+tokenizer = bundle.get("tokenizer", None)
+
+model = model.to(device).eval()
+
+print("✅ Model loaded")
+
+# ============================================================
+# OUTPUT
+# ============================================================
+
+out_dir = Path("outputs")
+out_dir.mkdir(exist_ok=True)
+
+prev_tokens = None
 all_midis = []
 
 # ============================================================
 # GENERATION LOOP
 # ============================================================
 
-for idx, (section, bars, energy) in enumerate(SONG_STRUCTURE):
-    print(f"🎼 Generating {section}")
+for i, (section, bars, energy) in enumerate(SONG_STRUCTURE):
+    print(f"🎼 {section}")
 
-    max_tokens = min(bars * BARS_TO_TOKENS, MAX_TOKENS)
-
-    # prompt tokens 来自上一段生成
-    prompts = [previous_tokens] if previous_tokens else []
+    max_len = min(bars * BARS_TO_TOKENS, MAX_TOKENS)
 
     with torch.no_grad():
-        results = generator.music_completion(
-            prompt_tokens=prompts,
-            temperature=ENERGY_CONFIG[energy]["temperature"],
-            top_p=ENERGY_CONFIG[energy]["top_p"],
-            max_gen_len=max_tokens,
-        )
+        if hasattr(model, "music_completion"):
+            out = model.music_completion(
+                prompt_tokens=[prev_tokens] if prev_tokens else None,
+                temperature=ENERGY_CONFIG[energy]["temperature"],
+                top_p=ENERGY_CONFIG[energy]["top_p"],
+                max_gen_len=max_len,
+            )
+            tokens = out[0]["tokens"]
+            midi = out[0]["generation"]["content"]
 
-    # decode 生成的 midi
-    generated_midi = results[0]["generation"]["content"]
-    generated_midi = apply_jay_rules(generated_midi, section, energy)
+        elif hasattr(model, "generate"):
+            tokens = model.generate(
+                prompt_tokens=prev_tokens,
+                max_length=max_len,
+                temperature=ENERGY_CONFIG[energy]["temperature"],
+                top_p=ENERGY_CONFIG[energy]["top_p"],
+            )
+            midi = tokenizer.decode(tokens)
 
-    # 保存
-    midi_path = output_dir / f"{idx:02d}_{section}.mid"
-    generator.tokenizer.compound_to_midi(generated_midi).save(midi_path)
+        else:
+            raise RuntimeError("❌ Unknown MusicLlama PT interface")
 
-    previous_tokens = results[0]["tokens"]
-    all_midis.append(midi_path)
+    midi = apply_jay_rules(midi, section, energy)
+
+    path = out_dir / f"{i:02d}_{section}.mid"
+    midi.save(path)
+
+    prev_tokens = tokens
+    all_midis.append(path)
 
 # ============================================================
-# CONCAT FULL SONG
+# DONE
 # ============================================================
 
-full_song = generator.tokenizer.compound_to_midi(
-    sum([generator.tokenizer.encode_series(load_midi(p)) for p in all_midis], [])
-)
-full_song.save(output_dir / "FULL_SONG.mid")
+print("🎉 Part_MIDI GENERATED")
 
-print("🎉 DONE: outputs/FULL_SONG.mid")
+
+
+
+# 执行拼接
+full_song_path = out_dir / "FULL_SONG.mid"
+concat_midis(all_midis, full_song_path)
+
+print(f"🎧 FULL SONG READY → {full_song_path}")
+
+
+
