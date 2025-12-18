@@ -119,7 +119,7 @@ def apply_jay_rules(midi, section, energy):
 # =========================
 # LOAD LOCAL .pt MODEL
 # =========================
-MODEL_PT_PATH = Path("../../../../moonbeam_weights/moonbeam-model.pt")
+MODEL_PT_PATH = Path("../../../../moonbeam-model/moonbeam-model.pt")
 
 assert MODEL_PT_PATH.exists(), f"❌ Model not found: {MODEL_PT_PATH}"
 
