@@ -42,7 +42,7 @@ class MusicLLaMA:
         # 比如 self.net = MyModelClass().to(self.device)
         # self.net.load_state_dict(self.model_state)
     
-    def generate(self, self, prompt_midi, bars, constraints,temperature, top_p):
+    def generate(self, prompt_midi, bars, constraints,temperature, top_p):
         """
         prompt_midi: 输入 MIDI 路径或 token
         n_bars: 生成小节数
