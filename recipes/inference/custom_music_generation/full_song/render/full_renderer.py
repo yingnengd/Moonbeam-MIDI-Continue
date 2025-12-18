@@ -61,25 +61,3 @@ def render_sections_full(
 
     print(f"✅ 分段 MIDI + 简谱 + 整首 MIDI + 整首简谱 已导出到 {out_dir}")
     return full
-
-
-def export_jianpu(inst: pretty_midi.Instrument, out_file: Path):
-    """
-    导出简谱：音高 -> 音级 (1~7)
-    只处理传入的旋律轨
-    """
-    lines = []
-    tonic = 60  # 默认 C4，可改为自动 key
-    scale = [0, 2, 4, 5, 7, 9, 11]  # C大调音阶
-
-    for n in inst.notes:
-        deg = (n.pitch - tonic) % 12
-        if deg in scale:
-            deg = scale.index(deg) + 1
-        else:
-            deg = "×"
-        dur = round(n.end - n.start, 2)
-        lines.append(f"{deg} ({dur})")
-
-    with open(out_file, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
