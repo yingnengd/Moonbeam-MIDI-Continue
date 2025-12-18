@@ -9,6 +9,9 @@ from model.music_llama import MusicLlamaModel
 '''
 
 
+import pretty_midi
+import os
+
 from custom_music_generation.full_song.engine.song_structure import SECTION_PLAN
 from custom_music_generation.full_song.engine.key_engine import extract_key_from_midi
 from custom_music_generation.full_song.engine.hook_memory import HookMemory
