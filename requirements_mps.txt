@@ -1,11 +1,5 @@
 # =========================
-# Core (Apple Silicon MPS)
-# =========================
-torch==2.2.2
-accelerate
-
-# =========================
-# Transformers / Moonbeam
+# Transformers / MusicLlama
 # =========================
 transformers>=4.38.0
 tokenizers==0.19.1
@@ -14,10 +8,21 @@ regex!=2019.12.17
 typing-extensions==4.8.0
 appdirs
 chardet
+peft>=0.5.2
+fairscale>=0.4.13
 
 # =========================
 # Music / MIDI
 # =========================
+pretty_midi
 music21
 mido
+numpy
 scipy
+
+# =========================
+# Tools / Utils
+# =========================
+tqdm
+PyYAML
+pillow
