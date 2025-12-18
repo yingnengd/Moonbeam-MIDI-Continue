@@ -1,6 +1,4 @@
 '''
-from custom_music_generation.full_song.engine.scale_engine import get_allowed_scale
-from custom_music_generation.full_song.engine.modulation_engine import apply_modulation
 
 def compose_section(section, bars, tonic, mode, hook, model, prompt):
     local_tonic = apply_modulation(section, tonic)
@@ -28,8 +26,8 @@ def compose_section(section, bars, tonic, mode, hook, model, prompt):
 '''
 #------------
 
-from custom_music_generation.full_song.engine.scale_engine import get_allowed_scale
-from custom_music_generation.full_song.engine.modulation_engine import apply_modulation
+from custom_music_generation.full_song.engine.scale_engine import get_allowed_pitch_classes
+from custom_music_generation.full_song.engine.pitch_constraints import apply_pitch_constraints
 
 
 def compose_section(
