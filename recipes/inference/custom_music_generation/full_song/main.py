@@ -9,13 +9,13 @@ from model.music_llama import MusicLlamaModel
 '''
 
 
-from full_song.engine.song_structure import SECTION_PLAN
-from full_song.engine.key_engine import extract_key_from_midi
-from full_song.engine.hook_memory import HookMemory
+from custom_music_generation.full_song.engine.song_structure import SECTION_PLAN
+from custom_music_generation.full_song.engine.key_engine import extract_key_from_midi
+from custom_music_generation.full_song.engine.hook_memory import HookMemory
 
-from full_song.composer.compose_section import compose_section
-from full_song.render.midi_renderer import render_sections_full
-from full_song.model.music_llama import MusicLlamaModel
+from custom_music_generation.full_song.composer.compose_section import compose_section
+from custom_music_generation.full_song.render.midi_renderer import render_sections_full
+from custom_music_generation.full_song.model.music_llama import MusicLlamaModel
 
 prompt = pretty_midi.PrettyMIDI("promptMIDI/prompt.mid")
 tonic, mode = extract_key_from_midi(prompt)
