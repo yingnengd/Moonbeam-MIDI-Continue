@@ -7,10 +7,13 @@ from pathlib import Path
 from moonbeam import Moonbeam
 from moonbeam.midi import load_midi, save_midi, concat_midis
 
+# =========================
+# TORCH SETUP
+# =========================
 torch.set_float32_matmul_precision("high")
 
 # =========================
-# DEVICE (MAC SAFE)
+# DEVICE (MAC / CUDA SAFE)
 # =========================
 if torch.backends.mps.is_available():
     device = "mps"
@@ -18,6 +21,8 @@ elif torch.cuda.is_available():
     device = "cuda"
 else:
     device = "cpu"
+
+print(f"🚀 Using device: {device}")
 
 # =========================
 # SONG STRUCTURE
@@ -27,9 +32,11 @@ SONG_STRUCTURE = [
     ("verse",   16, "low"),
     ("pre",     8,  "mid"),
     ("chorus",  8,  "high"),
+
     ("verse",   16, "low"),
     ("pre",     8,  "mid"),
     ("chorus",  8,  "high"),
+
     ("bridge",  8,  "low"),
     ("final",   12, "high"),
     ("outro",   4,  "low")
@@ -42,12 +49,13 @@ ENERGY_CONFIG = {
 }
 
 BARS_TO_TOKENS = 96
+MAX_TOKENS = 1024   # Moonbeam 安全上限
 
 # =========================
-# JAY STYLE RULES（不变）
+# JAY STYLE RULES（旋律规则）
 # =========================
-TONIC = 60
-PENTATONIC = [0, 2, 4, 7, 9]
+TONIC = 60  # C
+PENTATONIC = [0, 2, 4, 7, 9]  # 五声音阶
 
 MELODY_TRANSITION = {
     1: [(2,0.4),(3,0.4),(5,0.2)],
@@ -58,8 +66,13 @@ MELODY_TRANSITION = {
 }
 
 SECTION_END_DEGREE = {
-    "intro": 1, "verse": 1, "pre": 3,
-    "chorus": 5, "bridge": 1, "final": 5, "outro": 1
+    "intro": 1,
+    "verse": 1,
+    "pre": 3,
+    "chorus": 5,
+    "bridge": 1,
+    "final": 5,
+    "outro": 1
 }
 
 SECTION_PITCH_RANGE = {
@@ -69,37 +82,65 @@ SECTION_PITCH_RANGE = {
 }
 
 def jay_next_degree(prev):
-    choices, weights = zip(*MELODY_TRANSITION.get(prev, [(prev,1.0)]))
+    choices, weights = zip(*MELODY_TRANSITION.get(prev, [(prev, 1.0)]))
     return random.choices(choices, weights)[0]
 
 def apply_jay_rules(midi, section, energy):
+    if not midi.notes:
+        return midi
+
     prev_degree = 1
     low, high = SECTION_PITCH_RANGE[energy]
 
     for note in midi.notes:
         degree = jay_next_degree(prev_degree)
         pitch = TONIC + PENTATONIC[(degree - 1) % len(PENTATONIC)]
-        while pitch < low: pitch += 12
-        while pitch > high: pitch -= 12
+
+        while pitch < low:
+            pitch += 12
+        while pitch > high:
+            pitch -= 12
+
         note.pitch = pitch
+
         if energy == "high":
             note.velocity = min(127, int(note.velocity * 1.2))
         elif energy == "low":
             note.velocity = int(note.velocity * 0.85)
+
         prev_degree = degree
 
-    midi.notes[-1].pitch = TONIC + PENTATONIC[(SECTION_END_DEGREE[section]-1)%5]
+    # 段落收尾音
+    end_degree = SECTION_END_DEGREE.get(section, 1)
+    midi.notes[-1].pitch = TONIC + PENTATONIC[(end_degree - 1) % len(PENTATONIC)]
+
     return midi
 
 # =========================
-# MODEL
+# LOAD LOCAL .pt MODEL
 # =========================
-model = Moonbeam.from_pretrained(
-    "guozixunnicolas/moonbeam-midi-foundation-model",
-    torch_dtype=torch.float32
-).to(device)
+MODEL_PT_PATH = Path("../../../../moonbeam_weights/moonbeam-model.pt")
+
+assert MODEL_PT_PATH.exists(), f"❌ Model not found: {MODEL_PT_PATH}"
+
+model = Moonbeam()
+
+state = torch.load(MODEL_PT_PATH, map_location=device)
+
+# 兼容不同保存格式
+if isinstance(state, dict) and "state_dict" in state:
+    model.load_state_dict(state["state_dict"], strict=False)
+else:
+    model.load_state_dict(state, strict=False)
+
+model = model.to(device)
 model.eval()
 
+print("✅ Moonbeam local .pt loaded")
+
+# =========================
+# OUTPUT DIR
+# =========================
 output_dir = Path("outputs")
 output_dir.mkdir(exist_ok=True)
 
@@ -110,9 +151,9 @@ previous_midi = None
 all_midis = []
 
 for idx, (section, bars, energy) in enumerate(SONG_STRUCTURE):
-    print(f"🎼 {section}")
+    print(f"🎼 Generating {section}")
 
-    max_tokens = min(bars * BARS_TO_TOKENS, 1024)
+    max_tokens = min(bars * BARS_TO_TOKENS, MAX_TOKENS)
     seed = load_midi(previous_midi) if previous_midi else None
 
     with torch.no_grad():
@@ -132,5 +173,10 @@ for idx, (section, bars, energy) in enumerate(SONG_STRUCTURE):
     previous_midi = path
     all_midis.append(path)
 
-save_midi(concat_midis(all_midis), output_dir / "FULL_SONG.mid")
-print("✅ DONE")
+# =========================
+# CONCAT FULL SONG
+# =========================
+final_song = concat_midis(all_midis)
+save_midi(final_song, output_dir / "FULL_SONG.mid")
+
+print("🎉 DONE: outputs/FULL_SONG.mid")
