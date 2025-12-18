@@ -7,9 +7,12 @@ from composer.compose_section import compose_section
 from render.midi_renderer import render_sections_full
 from model.music_llama import MusicLlamaModel
 '''
-
-
+from pathlib import Path
 import pretty_midi
+
+BASE_DIR = Path(__file__).resolve().parent
+PROMPT_MIDI = BASE_DIR / "promptMIDI" / "prompt.mid"
+
 import os
 
 from custom_music_generation.full_song.engine.song_structure import SECTION_PLAN
@@ -20,7 +23,7 @@ from custom_music_generation.full_song.composer.compose_section import compose_s
 from custom_music_generation.full_song.render.midi_renderer import render_sections_full
 from custom_music_generation.full_song.model.music_llama import MusicLlamaModel
 
-prompt = pretty_midi.PrettyMIDI("promptMIDI/prompt.mid")
+prompt = pretty_midi.PrettyMIDI(str(PROMPT_MIDI))
 tonic, mode = extract_key_from_midi(prompt)
 
 model = MusicLlamaModel("../../../../moonbeam-model/moonbeam_839M.pt")
