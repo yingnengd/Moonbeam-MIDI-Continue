@@ -1,7 +1,10 @@
 import sys
 
 #from generation import MusicLlama
-from custom_music_generation.generation import Llama
+#from custom_music_generation.generation import Llama
+
+from custom_music_generation.generation import MusicLlama
+from model.base_model import BaseMusicModel
 
 
 
