@@ -9,7 +9,7 @@ import time
 from transformers import (
     AutoTokenizer,
     LlamaForCausalLM,
-    LlamaForCausalLM_Conditional_Generation,
+    #LlamaForCausalLM_Conditional_Generation,
     LlamaConfig,
 )
 from llama_recipes.datasets.music_tokenizer import MusicTokenizer
