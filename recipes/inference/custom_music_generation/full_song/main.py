@@ -23,9 +23,14 @@ from custom_music_generation.full_song.composer.compose_section import compose_s
 from custom_music_generation.full_song.render.midi_renderer import render_sections_full
 from custom_music_generation.full_song.model.music_llama import MusicLlamaModel
 
+print("🎵 Loading prompt MIDI...")
 prompt = pretty_midi.PrettyMIDI(str(PROMPT_MIDI))
-tonic, mode = extract_key_from_midi(prompt)
 
+print("🎼 Detecting key...")
+tonic, mode = extract_key_from_midi(prompt)
+print(f"🎹 Key = {tonic % 12}, Mode = {mode}")
+
+print("🤖 Loading model...")
 model = MusicLlamaModel("../../../../moonbeam-model/moonbeam_839M.pt")
 hook = HookMemory()
 
