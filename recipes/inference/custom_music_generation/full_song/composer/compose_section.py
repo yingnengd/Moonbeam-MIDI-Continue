@@ -1,5 +1,5 @@
-from full_song.engine.scale_engine import get_allowed_scale
-from full_song.engine.modulation_engine import apply_modulation
+from custom_music_generation.full_song.engine.scale_engine import get_allowed_scale
+from custom_music_generation.full_song.engine.modulation_engine import apply_modulation
 
 def compose_section(section, bars, tonic, mode, hook, model, prompt):
     local_tonic = apply_modulation(section, tonic)
