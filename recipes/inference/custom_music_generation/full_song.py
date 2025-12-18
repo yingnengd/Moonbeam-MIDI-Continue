@@ -159,7 +159,7 @@ def concat_midis(midi_paths, out_path):
 # LOAD LOCAL PT MODEL (NO CONFIG)
 # ============================================================
 
-MODEL_PT_PATH = Path("model_local.pt")  # ← 改成你的 pt 路径
+MODEL_PT_PATH = Path("../../../../moonbeam-model/moonbeam_839M.pt")  # ← 改成你的 pt 路径
 assert MODEL_PT_PATH.exists(), "❌ model pt not found"
 
 print("📦 Loading model...")
