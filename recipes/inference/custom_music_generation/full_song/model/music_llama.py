@@ -6,10 +6,6 @@ import sys
 from custom_music_generation.generation import MusicLlama
 from model.base_model import BaseMusicModel
 
-
-
-from model.base_model import BaseMusicModel
-
 class MusicLlamaModel(BaseMusicModel):
     def __init__(self, ckpt):
         self.model = MusicLlama.load_from_checkpoint(ckpt)
