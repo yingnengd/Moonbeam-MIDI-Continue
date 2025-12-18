@@ -1,20 +1,19 @@
-import os
-os.environ["DISABLE_FLASH_ATTN"] = "1"
+# ============================================================
+# MusicLlama Local .pt | Full Song Continuation (Segmented)
+# ============================================================
 
+import os
 import torch
 import random
 from pathlib import Path
-from moonbeam import Moonbeam
-from moonbeam.midi import load_midi, save_midi, concat_midis
+from generation import MusicLlama
 
-# =========================
-# TORCH SETUP
-# =========================
+# ============================================================
+# TORCH / DEVICE
+# ============================================================
+
 torch.set_float32_matmul_precision("high")
 
-# =========================
-# DEVICE (MAC / CUDA SAFE)
-# =========================
 if torch.backends.mps.is_available():
     device = "mps"
 elif torch.cuda.is_available():
@@ -24,38 +23,38 @@ else:
 
 print(f"🚀 Using device: {device}")
 
-# =========================
+# ============================================================
 # SONG STRUCTURE
-# =========================
+# ============================================================
+
 SONG_STRUCTURE = [
     ("intro",   8,  "low"),
     ("verse",   16, "low"),
     ("pre",     8,  "mid"),
     ("chorus",  8,  "high"),
-
     ("verse",   16, "low"),
     ("pre",     8,  "mid"),
     ("chorus",  8,  "high"),
-
     ("bridge",  8,  "low"),
     ("final",   12, "high"),
-    ("outro",   4,  "low")
+    ("outro",   4,  "low"),
 ]
 
 ENERGY_CONFIG = {
-    "low":  dict(temperature=0.8,  top_k=40),
-    "mid":  dict(temperature=1.0,  top_k=60),
-    "high": dict(temperature=1.15, top_k=90),
+    "low":  dict(temperature=0.8,  top_p=0.9),
+    "mid":  dict(temperature=1.0,  top_p=0.9),
+    "high": dict(temperature=1.15, top_p=0.95),
 }
 
-BARS_TO_TOKENS = 96
-MAX_TOKENS = 1024   # Moonbeam 安全上限
+BARS_TO_TOKENS = 96  # 每小节对应 token 数
+MAX_TOKENS = 1024    # 安全上限
 
-# =========================
-# JAY STYLE RULES（旋律规则）
-# =========================
-TONIC = 60  # C
-PENTATONIC = [0, 2, 4, 7, 9]  # 五声音阶
+# ============================================================
+# JAY CHOU STYLE RULES
+# ============================================================
+
+TONIC = 60
+PENTATONIC = [0, 2, 4, 7, 9]
 
 MELODY_TRANSITION = {
     1: [(2,0.4),(3,0.4),(5,0.2)],
@@ -72,7 +71,7 @@ SECTION_END_DEGREE = {
     "chorus": 5,
     "bridge": 1,
     "final": 5,
-    "outro": 1
+    "outro": 1,
 }
 
 SECTION_PITCH_RANGE = {
@@ -85,14 +84,17 @@ def jay_next_degree(prev):
     choices, weights = zip(*MELODY_TRANSITION.get(prev, [(prev, 1.0)]))
     return random.choices(choices, weights)[0]
 
-def apply_jay_rules(midi, section, energy):
-    if not midi.notes:
-        return midi
+def apply_jay_rules(midi_data, section, energy):
+    """
+    midi_data: MusicLlama decode 后的 midi 对象
+    """
+    if not midi_data.notes:
+        return midi_data
 
     prev_degree = 1
     low, high = SECTION_PITCH_RANGE[energy]
 
-    for note in midi.notes:
+    for note in midi_data.notes:
         degree = jay_next_degree(prev_degree)
         pitch = TONIC + PENTATONIC[(degree - 1) % len(PENTATONIC)]
 
@@ -110,73 +112,81 @@ def apply_jay_rules(midi, section, energy):
 
         prev_degree = degree
 
-    # 段落收尾音
     end_degree = SECTION_END_DEGREE.get(section, 1)
-    midi.notes[-1].pitch = TONIC + PENTATONIC[(end_degree - 1) % len(PENTATONIC)]
+    midi_data.notes[-1].pitch = TONIC + PENTATONIC[(end_degree - 1) % len(PENTATONIC)]
 
-    return midi
+    return midi_data
 
-# =========================
-# LOAD LOCAL .pt MODEL
-# =========================
-MODEL_PT_PATH = Path("../../../../moonbeam-model/moonbeam-model.pt")
+# ============================================================
+# LOAD LOCAL .PT MODEL (MusicLlama)
+# ============================================================
+
+MODEL_PT_PATH = Path("model_local.pt")  # <-- 改成你的权重路径
+CONFIG_PATH   = Path("config.yaml")     # <-- 配置路径
+TOKENIZER_PATH= Path("tokenizer.json")  # <-- tokenizer 路径
 
 assert MODEL_PT_PATH.exists(), f"❌ Model not found: {MODEL_PT_PATH}"
 
-model = Moonbeam()
+generator = MusicLlama.build(
+    ckpt_dir=str(MODEL_PT_PATH),
+    model_config_path=str(CONFIG_PATH),
+    tokenizer_path=str(TOKENIZER_PATH),
+    max_seq_len=MAX_TOKENS,
+    max_batch_size=1,
+    finetuned_PEFT_weight_path=None,
+).model.to(device)
 
-state = torch.load(MODEL_PT_PATH, map_location=device)
+generator.eval()
+print("✅ MusicLlama local .pt loaded")
 
-# 兼容不同保存格式
-if isinstance(state, dict) and "state_dict" in state:
-    model.load_state_dict(state["state_dict"], strict=False)
-else:
-    model.load_state_dict(state, strict=False)
-
-model = model.to(device)
-model.eval()
-
-print("✅ Moonbeam local .pt loaded")
-
-# =========================
+# ============================================================
 # OUTPUT DIR
-# =========================
+# ============================================================
+
 output_dir = Path("outputs")
 output_dir.mkdir(exist_ok=True)
 
-# =========================
-# GENERATION LOOP
-# =========================
-previous_midi = None
+previous_tokens = None
 all_midis = []
+
+# ============================================================
+# GENERATION LOOP
+# ============================================================
 
 for idx, (section, bars, energy) in enumerate(SONG_STRUCTURE):
     print(f"🎼 Generating {section}")
 
     max_tokens = min(bars * BARS_TO_TOKENS, MAX_TOKENS)
-    seed = load_midi(previous_midi) if previous_midi else None
+
+    # prompt tokens 来自上一段生成
+    prompts = [previous_tokens] if previous_tokens else []
 
     with torch.no_grad():
-        generated = model.generate(
-            seed=seed,
-            max_new_tokens=max_tokens,
+        results = generator.music_completion(
+            prompt_tokens=prompts,
             temperature=ENERGY_CONFIG[energy]["temperature"],
-            top_k=ENERGY_CONFIG[energy]["top_k"],
-            use_cache=False
+            top_p=ENERGY_CONFIG[energy]["top_p"],
+            max_gen_len=max_tokens,
         )
 
-    generated = apply_jay_rules(generated, section, energy)
+    # decode 生成的 midi
+    generated_midi = results[0]["generation"]["content"]
+    generated_midi = apply_jay_rules(generated_midi, section, energy)
 
-    path = output_dir / f"{idx:02d}_{section}.mid"
-    save_midi(generated, path)
+    # 保存
+    midi_path = output_dir / f"{idx:02d}_{section}.mid"
+    generator.tokenizer.compound_to_midi(generated_midi).save(midi_path)
 
-    previous_midi = path
-    all_midis.append(path)
+    previous_tokens = results[0]["tokens"]
+    all_midis.append(midi_path)
 
-# =========================
+# ============================================================
 # CONCAT FULL SONG
-# =========================
-final_song = concat_midis(all_midis)
-save_midi(final_song, output_dir / "FULL_SONG.mid")
+# ============================================================
+
+full_song = generator.tokenizer.compound_to_midi(
+    sum([generator.tokenizer.encode_series(load_midi(p)) for p in all_midis], [])
+)
+full_song.save(output_dir / "FULL_SONG.mid")
 
 print("🎉 DONE: outputs/FULL_SONG.mid")
