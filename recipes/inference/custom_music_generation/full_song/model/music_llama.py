@@ -1,8 +1,4 @@
 import sys
-from pathlib import Path
-
-# 将上一级目录加入 sys.path
-sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from generation import MusicLlama
 
