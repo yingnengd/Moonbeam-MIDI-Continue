@@ -10,9 +10,8 @@ from generation import MusicLlama# =============================================
 # MusicLlama Local .pt | Full Song Continuation (NO CONFIG)
 # ============================================================
 
-import torch
-import random
-from pathlib import Path
+import pretty_midi
+
 
 # ============================================================
 # TORCH / DEVICE
