@@ -6,10 +6,10 @@ from composer.compose_section import compose_section
 from render.midi_renderer import render_sections_full
 from model.music_llama import MusicLlamaModel
 
-prompt = pretty_midi.PrettyMIDI("prompt.mid")
+prompt = pretty_midi.PrettyMIDI("promptMIDI/prompt.mid")
 tonic, mode = extract_key_from_midi(prompt)
 
-model = MusicLlamaModel("ckpt/music_llama")
+model = MusicLlamaModel("../../../../moonbeam-model/moonbeam_839M.pt")
 hook = HookMemory()
 
 sections = []
