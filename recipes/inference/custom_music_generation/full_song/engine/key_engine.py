@@ -1,3 +1,5 @@
+# engine/key_engine.py
+
 import numpy as np
 
 KEY_NAMES = ["C", "C#", "D", "D#", "E", "F",
@@ -5,12 +7,10 @@ KEY_NAMES = ["C", "C#", "D", "D#", "E", "F",
 
 def extract_key_from_midi(pm):
     """
-    从 MIDI 中估计调性
     返回:
-        tonic_midi: int (60 = C4)
+        tonic_pc: 0–11
         mode: "major" | "minor"
     """
-
     pitch_class_hist = np.zeros(12)
 
     for inst in pm.instruments:
@@ -20,7 +20,7 @@ def extract_key_from_midi(pm):
             pitch_class_hist[n.pitch % 12] += (n.end - n.start)
 
     if pitch_class_hist.sum() == 0:
-        return 60, "major"
+        return 0, "major"
 
     tonic_pc = int(np.argmax(pitch_class_hist))
 
@@ -29,8 +29,25 @@ def extract_key_from_midi(pm):
 
     mode = "major" if major_third >= minor_third else "minor"
 
-    tonic_midi = 60 + tonic_pc
-
     print(f"🎼 Detected key: {KEY_NAMES[tonic_pc]} {mode}")
 
-    return tonic_midi, mode
+    return tonic_pc, mode
+
+
+def get_allowed_pcs(tonic_pc, mode, pentatonic=True):
+    """
+    根据调性返回允许的音级（pitch class）
+    """
+
+    if pentatonic:
+        if mode == "major":
+            scale = [0, 2, 4, 7, 9]
+        else:
+            scale = [0, 3, 5, 7, 10]
+    else:
+        if mode == "major":
+            scale = [0, 2, 4, 5, 7, 9, 11]
+        else:
+            scale = [0, 2, 3, 5, 7, 8, 10]
+
+    return {(tonic_pc + pc) % 12 for pc in scale}

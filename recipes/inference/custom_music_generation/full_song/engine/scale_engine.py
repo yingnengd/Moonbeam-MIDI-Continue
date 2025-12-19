@@ -30,6 +30,6 @@ def get_allowed_pitch_classes(
     tonic_midi: int,
     scale_name: str
 ):
-    tonic_pc = tonic_midi % 12
-    return [(tonic_pc + i) % 12 for i in SCALES[scale_name]]
+    tonic = tonic_midi % 12
+    return [(tonic + i) % 12 for i in SCALES[scale_name]]
 
